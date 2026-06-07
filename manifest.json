@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "AI Studio Automator",
+  "version": "2.0.0",
+  "description": "Automate bulk prompting in Google AI Studio using data from xlsx/csv files.",
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "permissions": [
+    "storage",
+    "scripting",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://aistudio.google.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://aistudio.google.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
