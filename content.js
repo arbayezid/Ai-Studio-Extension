@@ -147,7 +147,24 @@ async function selectModel(modelValue) {
     }
 
     // 3. Find options in the dropdown/dialog
-    const options = document.querySelectorAll('mat-option, .model-option, [role="option"], ms-model-item, button[role="option"], [data-test-id*="model-option"]');
+    const optionSelectors = [
+      'mat-option', '.model-option', '[role="option"]', 'ms-model-item', 
+      'button[role="option"]', '[data-test-id*="model-option"]',
+      'ms-model-card', '[data-test-id*="model-card"]', '.model-card', 'div[class*="model-card"]'
+    ].join(', ');
+    
+    let options = Array.from(searchRoot.querySelectorAll(optionSelectors));
+    
+    if (options.length === 0) {
+      // Fallback: finding clickable divs that contain 'gemini'
+      const allClickables = Array.from(searchRoot.querySelectorAll('button, div[role="button"], a[role="button"]'));
+      options = allClickables.filter(el => {
+         const text = el.textContent.toLowerCase();
+         // Exclude tabs and buttons without model descriptions
+         return text.includes('gemini') && text.length > 10; 
+      });
+    }
+
     const normalize = (s) => (s || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
     const normTarget = normalize(modelValue);
 
@@ -160,7 +177,7 @@ async function selectModel(modelValue) {
       if (text === normTarget || val === normTarget) {
         opt.click();
         clicked = true;
-        await sleep(500);
+        await sleep(600);
         break;
       }
     }
@@ -173,17 +190,21 @@ async function selectModel(modelValue) {
         if (text.includes(normTarget) || val.includes(normTarget)) {
           opt.click();
           clicked = true;
-          await sleep(500);
+          await sleep(600);
           break;
         }
       }
     }
 
     // 4. Close the prompt selection box if it's still open
-    const closeBtn = document.querySelector('button[aria-label="Close panel"], button[data-test-close-button], button[aria-label="Close" i]');
+    let closeBtn = searchRoot.querySelector('button[aria-label*="Close" i], button[data-test-close-button]');
+    if (!closeBtn) {
+      closeBtn = document.querySelector('button[aria-label="Close panel"], button[data-test-close-button], button[aria-label="Close" i]');
+    }
+    
     if (closeBtn) {
       closeBtn.click();
-      await sleep(400);
+      await sleep(500);
     }
   } catch (e) {
     console.warn('[Automator] Model selection skipped:', e.message);
