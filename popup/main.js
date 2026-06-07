@@ -4,6 +4,7 @@ import { updateRowCountChip, addLog } from './ui.js';
 import { restoreSettings, saveSettings } from './storage.js';
 import { processFile, clearFile } from './file.js';
 import { startAutomation } from './automator.js';
+import { setRunningUI, setStatus, updateProgress, addLogRaw } from './ui.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
   restoreSettings();
@@ -17,6 +18,42 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   } catch (e) {
     console.error('Error opening initial tab:', e);
+  }
+
+  // Restore state from background script
+  chrome.runtime.sendMessage({ action: 'getState' }, (res) => {
+    if (res) {
+      state.isRunning = res.isRunning;
+      setRunningUI(res.isRunning);
+      if (res.progressState) {
+        updateProgress(res.progressState.current, res.progressState.total, res.progressState.rowNum, res.progressState.label);
+      }
+      if (res.statusState) {
+        setStatus(res.statusState.label, res.statusState.stateClass);
+      }
+      if (res.currentLogs && res.currentLogs.length > 0) {
+        els.logBox.innerHTML = '';
+        res.currentLogs.forEach(log => {
+          addLogRaw(log.type, log.message, log.ts);
+        });
+        els.logBox.classList.remove('hidden');
+        els.logBox.scrollTop = els.logBox.scrollHeight;
+      }
+    }
+  });
+});
+
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.action === 'newLog') {
+    els.logBox.classList.remove('hidden');
+    addLogRaw(msg.log.type, msg.log.message, msg.log.ts);
+  } else if (msg.action === 'progressUpdate') {
+    updateProgress(msg.progressState.current, msg.progressState.total, msg.progressState.rowNum, msg.progressState.label);
+  } else if (msg.action === 'statusUpdate') {
+    setStatus(msg.statusState.label, msg.statusState.stateClass);
+  } else if (msg.action === 'runningUpdate') {
+    state.isRunning = msg.isRunning;
+    setRunningUI(msg.isRunning);
   }
 });
 
@@ -62,7 +99,6 @@ els.startBtn.addEventListener('click', () => {
 
 els.stopBtn.addEventListener('click', () => {
   if (!state.isRunning) return;
-  state.stopRequested = true;
-  addLog('warn', 'Stop requested — finishing current row…');
+  chrome.runtime.sendMessage({ action: 'stopAutomation' });
   els.stopBtn.disabled = true;
 });

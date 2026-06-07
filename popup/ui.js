@@ -26,14 +26,18 @@ export function updateProgress(current, total, rowNum, label) {
   els.progressDetail.textContent = `Row ${rowNum} · ${current} of ${total} complete`;
 }
 
-export function addLog(type, message) {
-  const ts = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+export function addLogRaw(type, message, ts) {
   const classMap = { ok: 'log-ok', err: 'log-err', inf: 'log-inf', warn: 'log-warn' };
   const entry = document.createElement('div');
   entry.className = 'log-entry';
   entry.innerHTML = `<span class="log-ts">${ts}</span><span class="${classMap[type] || ''}">${escHtml(message)}</span>`;
   els.logBox.appendChild(entry);
   els.logBox.scrollTop = els.logBox.scrollHeight;
+}
+
+export function addLog(type, message) {
+  const ts = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  addLogRaw(type, message, ts);
 }
 
 export function escHtml(str) {
