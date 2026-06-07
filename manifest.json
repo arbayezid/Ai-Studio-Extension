@@ -4,7 +4,7 @@
   "version": "2.0.0",
   "description": "Automate bulk prompting in Google AI Studio using data from xlsx/csv files.",
   "action": {
-    "default_popup": "popup.html"
+    "default_popup": "popup/popup.html"
   },
   "permissions": [
     "storage",
@@ -17,7 +17,11 @@
   "content_scripts": [
     {
       "matches": ["https://aistudio.google.com/*"],
-      "js": ["content.js"],
+      "js": [
+        "content/utils.js",
+        "content/actions.js",
+        "content/main.js"
+      ],
       "run_at": "document_idle"
     }
   ]

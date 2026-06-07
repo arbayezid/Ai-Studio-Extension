@@ -1,65 +1,3 @@
-// ============================================================
-//  GEMINI AI STUDIO AUTOMATOR — content.js  v2.0
-//  Runs on: aistudio.google.com
-//  Handles two actions from popup:
-//    1. setupStudio  — select model + inject system prompt
-//    2. runPrompt    — paste input text and click Run
-// ============================================================
-
-/** Wait for a DOM element matching selector to appear */
-function waitForElement(selector, timeout = 10000) {
-  return new Promise((resolve, reject) => {
-    const el = document.querySelector(selector);
-    if (el) return resolve(el);
-
-    const observer = new MutationObserver(() => {
-      const found = document.querySelector(selector);
-      if (found) { observer.disconnect(); resolve(found); }
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-
-    setTimeout(() => {
-      observer.disconnect();
-      reject(new Error(`Timeout: "${selector}" not found after ${timeout}ms`));
-    }, timeout);
-  });
-}
-
-/** Wait for element and check it's visible */
-async function waitForVisible(selector, timeout = 10000) {
-  const el = await waitForElement(selector, timeout);
-  await sleep(100);
-  return el;
-}
-
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-/**
- * Set value on an Angular/React-managed input or textarea
- * and fire the necessary events so the framework picks it up.
- */
-function setNativeValue(el, value) {
-  el.focus();
-  // Select all and delete existing content first
-  el.select?.();
-  document.execCommand('selectAll', false, null);
-  document.execCommand('delete', false, null);
-
-  // Use execCommand to type the value (most compatible with Angular)
-  document.execCommand('insertText', false, value);
-
-  // Also dispatch raw events as fallback
-  el.dispatchEvent(new Event('input',  { bubbles: true }));
-  el.dispatchEvent(new Event('change', { bubbles: true }));
-}
-
-// ─────────────────────────────────────────────────────────────
-// ACTION 1: setupStudio
-//   · Selects AI model from the model picker
-//   · Injects system prompt into the System Instructions panel
-// ─────────────────────────────────────────────────────────────
 async function setupStudio({ model, systemPrompt }) {
   try {
     // ── 1a. Select the model ────────────────────────────────
@@ -99,8 +37,6 @@ async function selectModel(modelValue) {
       const allBtns = Array.from(document.querySelectorAll('button, [role="button"]'));
       modelBtn = allBtns.find(btn => {
         const text = btn.textContent.toLowerCase();
-        // Model button should have gemini text, not be the system instruction or run button
-        // and usually has a fairly long description or title
         return text.includes('gemini') && 
                !text.includes('system instruction') && 
                !text.includes('send') &&
@@ -160,7 +96,6 @@ async function selectModel(modelValue) {
       const allClickables = Array.from(searchRoot.querySelectorAll('button, div[role="button"], a[role="button"]'));
       options = allClickables.filter(el => {
          const text = el.textContent.toLowerCase();
-         // Exclude tabs and buttons without model descriptions
          return text.includes('gemini') && text.length > 10; 
       });
     }
@@ -241,7 +176,6 @@ async function injectSystemPrompt(promptText) {
   try {
     textarea = await waitForElement('ms-system-instructions textarea[aria-label="System instructions"], textarea[aria-label="System instructions"]', 3000);
   } catch {
-    // Fallback selectors if the primary one fails
     textarea = document.querySelector('ms-system-instructions textarea');
   }
 
@@ -260,12 +194,6 @@ async function injectSystemPrompt(promptText) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// ACTION 2: runPrompt
-//   · Paste input text into the chat/prompt input field
-//   · Click the Run / Send button
-//   · Wait for the response to complete
-// ─────────────────────────────────────────────────────────────
 async function runPrompt({ inputText }) {
   try {
     // ── Find the prompt input area ─────────────────────────
@@ -345,10 +273,6 @@ async function runPrompt({ inputText }) {
   }
 }
 
-/**
- * Wait for the AI response to finish.
- * Detects a "stop generating" button disappearing, or a stable DOM period.
- */
 async function waitForResponseComplete(timeout = 60000) {
   const start = Date.now();
 
@@ -356,13 +280,11 @@ async function waitForResponseComplete(timeout = 60000) {
   await sleep(1200);
 
   while (Date.now() - start < timeout) {
-    // Check if a "stop generating" / "stop" button is present (means still running)
     const stopBtn = document.querySelector(
       'button[aria-label*="Stop" i], button[aria-label*="stop generating" i], button[data-test-id="stop-button"]'
     );
 
     if (!stopBtn) {
-      // No stop button → generation is done (or never started)
       await sleep(500); // Extra buffer
       return;
     }
@@ -370,33 +292,5 @@ async function waitForResponseComplete(timeout = 60000) {
     await sleep(600);
   }
 
-  // Timed out — continue anyway
   console.warn('[Automator] Response wait timed out, continuing.');
 }
-
-// ─────────────────────────────────────────────────────────────
-// MESSAGE LISTENER
-// ─────────────────────────────────────────────────────────────
-chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
-  if (request.action === 'setupStudio') {
-    setupStudio(request)
-      .then(sendResponse)
-      .catch(err => sendResponse({ success: false, message: err.message }));
-    return true;
-  }
-
-  if (request.action === 'runPrompt') {
-    runPrompt(request)
-      .then(sendResponse)
-      .catch(err => sendResponse({ success: false, message: err.message }));
-    return true;
-  }
-
-  // Legacy: keep backward compat
-  if (request.action === 'injectSystemInstruction') {
-    injectSystemPrompt(request.text)
-      .then(() => sendResponse({ success: true, message: 'Injected.' }))
-      .catch(err => sendResponse({ success: false, message: err.message }));
-    return true;
-  }
-});
