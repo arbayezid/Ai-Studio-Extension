@@ -1,5 +1,22 @@
 async function setupStudio({ model, systemPrompt }) {
   try {
+    // ── 0. Ensure Run Settings Sidebar is Open ──────────────
+    const sidebarToggle = document.querySelector('button[aria-label="Run settings"], button[mattooltip="Run settings"], button[data-test-id="run-settings-toggle"]');
+    // In AI Studio, the toggle button might not have aria-expanded, but if it's closed, the sidebar itself might be hidden.
+    // Alternatively, we can check if a known sidebar element is visible.
+    // If the sidebar toggle is present and not expanded, we can click it.
+    if (sidebarToggle && sidebarToggle.getAttribute('aria-expanded') === 'false') {
+      sidebarToggle.click();
+      await sleep(500);
+    } else if (sidebarToggle) {
+      // Fallback: check if the sidebar content is visible
+      const sidebarPanel = document.querySelector('ms-run-settings-panel, .run-settings-panel');
+      if (!sidebarPanel || sidebarPanel.clientWidth === 0) {
+        sidebarToggle.click();
+        await sleep(500);
+      }
+    }
+
     // ── 1a. Select the model ────────────────────────────────
     await selectModel(model);
     await sleep(600);
@@ -132,15 +149,15 @@ async function selectModel(modelValue) {
     }
 
     // 4. Close the prompt selection box if it's still open
-    let closeBtn = searchRoot.querySelector('button[aria-label*="Close" i], button[data-test-close-button]');
-    if (!closeBtn) {
-      closeBtn = document.querySelector('button[aria-label="Close panel"], button[data-test-close-button], button[aria-label="Close" i]');
-    }
+    // let closeBtn = searchRoot.querySelector('button[aria-label*="Close" i], button[data-test-close-button]');
+    // if (!closeBtn) {
+    //   closeBtn = document.querySelector('button[aria-label="Close panel"], button[data-test-close-button], button[aria-label="Close" i]');
+    // }
     
-    if (closeBtn) {
-      closeBtn.click();
-      await sleep(500);
-    }
+    // if (closeBtn) {
+    //   closeBtn.click();
+    //   await sleep(500);
+    // }
   } catch (e) {
     console.warn('[Automator] Model selection skipped:', e.message);
   }
@@ -187,11 +204,11 @@ async function injectSystemPrompt(promptText) {
   await sleep(300);
 
   // 6. Close the system prompt box
-  const closeBtn = document.querySelector('button[aria-label="Close panel"], button[data-test-close-button]');
-  if (closeBtn) {
-    closeBtn.click();
-    await sleep(300);
-  }
+  // const closeBtn = document.querySelector('button[aria-label="Close panel"], button[data-test-close-button]');
+  // if (closeBtn) {
+  //   closeBtn.click();
+  //   await sleep(300);
+  // }
 }
 
 async function runPrompt({ inputText }) {
@@ -230,9 +247,11 @@ async function runPrompt({ inputText }) {
     // ── Click the Run / Send button ────────────────────────
     let runBtn = null;
     const runSelectors = [
+      'button.ctrl-enter-submits',
+      'button[type="submit"].ms-button-primary',
       'button[aria-label="Run"]',
       'button[aria-label="Send message"]',
-      'button[aria-label*="run" i]',
+      'button[aria-label*="run" i]:not([aria-label*="settings" i])',
       'button[data-test-id="run-button"]',
       'ms-prompt-input-wrapper button[type="submit"]',
       '.run-button',
@@ -250,7 +269,7 @@ async function runPrompt({ inputText }) {
       for (const btn of [...allBtns].reverse()) {
         const label = (btn.getAttribute('aria-label') || '').toLowerCase();
         const text  = btn.textContent.trim().toLowerCase();
-        if ((label.includes('run') || label.includes('send') || text === 'run') && !btn.disabled) {
+        if ((label.includes('run') && !label.includes('settings') || label.includes('send') || text.includes('run') && !text.includes('settings')) && !btn.disabled) {
           runBtn = btn;
           break;
         }
@@ -273,23 +292,41 @@ async function runPrompt({ inputText }) {
   }
 }
 
-async function waitForResponseComplete(timeout = 60000) {
+async function waitForResponseComplete(timeout = 180000) {
   const start = Date.now();
 
   // Give it a moment to start generating
-  await sleep(1200);
+  await sleep(2000);
 
   while (Date.now() - start < timeout) {
     const stopBtn = document.querySelector(
       'button[aria-label*="Stop" i], button[aria-label*="stop generating" i], button[data-test-id="stop-button"]'
     );
 
+    let hasStopText = false;
     if (!stopBtn) {
-      await sleep(500); // Extra buffer
+      const allBtns = document.querySelectorAll('button');
+      for (const btn of allBtns) {
+        const text = btn.textContent.trim().toLowerCase();
+        if (text === 'stop' || text === 'stop generating' || text.includes('stop generating')) {
+          hasStopText = true;
+          break;
+        }
+      }
+    }
+
+    let runBtnDisabled = false;
+    const runBtn = document.querySelector('button.ctrl-enter-submits, button[type="submit"].ms-button-primary, button[aria-label="Run"]');
+    if (!runBtn || runBtn.disabled || runBtn.getAttribute('aria-disabled') === 'true') {
+      runBtnDisabled = true;
+    }
+
+    if (!stopBtn && !hasStopText && runBtnDisabled) {
+      await sleep(1000); // Extra buffer
       return;
     }
 
-    await sleep(600);
+    await sleep(800);
   }
 
   console.warn('[Automator] Response wait timed out, continuing.');
